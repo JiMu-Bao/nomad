@@ -8,22 +8,32 @@ import { componentA11yAudit } from 'nomad-ui/tests/helpers/a11y-audit';
 
 const REF_DATE = new Date();
 
-module('Integration | Component | line chart', function(hooks) {
+module('Integration | Component | line-chart', function(hooks) {
   setupRenderingTest(hooks);
 
   test('when a chart has annotations, they are rendered in order', async function(assert) {
-    const annotations = [{ x: 2, type: 'info' }, { x: 1, type: 'error' }, { x: 3, type: 'info' }];
+    const annotations = [
+      { x: 2, type: 'info' },
+      { x: 1, type: 'error' },
+      { x: 3, type: 'info' },
+    ];
     this.setProperties({
       annotations,
-      data: [{ x: 1, y: 1 }, { x: 10, y: 10 }],
+      data: [
+        { x: 1, y: 1 },
+        { x: 10, y: 10 },
+      ],
     });
 
     await render(hbs`
       <LineChart
         @xProp="x"
         @yProp="y"
-        @data={{this.data}}
-        @annotations={{this.annotations}} />
+        @data={{this.data}}>
+        <:after as |c|>
+          <c.VAnnotations @annotations={{this.annotations}} />
+        </:after>
+      </LineChart>
     `);
 
     const sortedAnnotations = annotations.sortBy('x');
@@ -61,7 +71,10 @@ module('Integration | Component | line chart', function(hooks) {
     ];
     this.setProperties({
       annotations,
-      data: [{ x: 1, y: 1 }, { x: 10, y: 10 }],
+      data: [
+        { x: 1, y: 1 },
+        { x: 10, y: 10 },
+      ],
     });
 
     await render(hbs`
@@ -69,8 +82,11 @@ module('Integration | Component | line chart', function(hooks) {
         @xProp="x"
         @yProp="y"
         @timeseries={{true}}
-        @data={{this.data}}
-        @annotations={{this.annotations}} />
+        @data={{this.data}}>
+        <:after as |c|>
+          <c.VAnnotations @annotations={{this.annotations}} />
+        </:after>
+      </LineChart>
     `);
 
     const sortedAnnotations = annotations.sortBy('x').reverse();
@@ -87,7 +103,10 @@ module('Integration | Component | line chart', function(hooks) {
     const annotations = [{ x: 2, type: 'info', meta: { data: 'here' } }];
     this.setProperties({
       annotations,
-      data: [{ x: 1, y: 1 }, { x: 10, y: 10 }],
+      data: [
+        { x: 1, y: 1 },
+        { x: 10, y: 10 },
+      ],
       click: sinon.spy(),
     });
 
@@ -95,9 +114,11 @@ module('Integration | Component | line chart', function(hooks) {
       <LineChart
         @xProp="x"
         @yProp="y"
-        @data={{this.data}}
-        @annotations={{this.annotations}}
-        @onAnnotationClick={{this.click}} />
+        @data={{this.data}}>
+        <:after as |c|>
+          <c.VAnnotations @annotations={{this.annotations}} @annotationClick={{this.click}} />
+        </:after>
+      </LineChart>
     `);
 
     await click('[data-test-annotation] button');
@@ -105,10 +126,17 @@ module('Integration | Component | line chart', function(hooks) {
   });
 
   test('annotations will have staggered heights when too close to be positioned side-by-side', async function(assert) {
-    const annotations = [{ x: 2, type: 'info' }, { x: 2.4, type: 'error' }, { x: 9, type: 'info' }];
+    const annotations = [
+      { x: 2, type: 'info' },
+      { x: 2.4, type: 'error' },
+      { x: 9, type: 'info' },
+    ];
     this.setProperties({
       annotations,
-      data: [{ x: 1, y: 1 }, { x: 10, y: 10 }],
+      data: [
+        { x: 1, y: 1 },
+        { x: 10, y: 10 },
+      ],
       click: sinon.spy(),
     });
 
@@ -117,8 +145,11 @@ module('Integration | Component | line chart', function(hooks) {
         <LineChart
           @xProp="x"
           @yProp="y"
-          @data={{this.data}}
-          @annotations={{this.annotations}} />
+          @data={{this.data}}>
+          <:after as |c|>
+            <c.VAnnotations @annotations={{this.annotations}} />
+          </:after>
+        </LineChart>
       </div>
     `);
 

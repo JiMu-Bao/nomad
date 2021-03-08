@@ -2602,24 +2602,6 @@ func (n *NetworkResource) PortLabels() map[string]int {
 	return labelValues
 }
 
-// ConnectPort returns the Connect port for the given service. Returns false if
-// no port was found for a service with that name.
-func (n *NetworkResource) PortForService(serviceName string) (Port, bool) {
-	label := fmt.Sprintf("%s-%s", ConnectProxyPrefix, serviceName)
-	for _, port := range n.ReservedPorts {
-		if port.Label == label {
-			return port, true
-		}
-	}
-	for _, port := range n.DynamicPorts {
-		if port.Label == label {
-			return port, true
-		}
-	}
-
-	return Port{}, false
-}
-
 // Networks defined for a task on the Resources struct.
 type Networks []*NetworkResource
 
@@ -2636,20 +2618,30 @@ func (ns Networks) Copy() Networks {
 }
 
 // Port assignment and IP for the given label or empty values.
-func (ns Networks) Port(label string) (string, int) {
+func (ns Networks) Port(label string) AllocatedPortMapping {
 	for _, n := range ns {
 		for _, p := range n.ReservedPorts {
 			if p.Label == label {
-				return n.IP, p.Value
+				return AllocatedPortMapping{
+					Label:  label,
+					Value:  p.Value,
+					To:     p.To,
+					HostIP: n.IP,
+				}
 			}
 		}
 		for _, p := range n.DynamicPorts {
 			if p.Label == label {
-				return n.IP, p.Value
+				return AllocatedPortMapping{
+					Label:  label,
+					Value:  p.Value,
+					To:     p.To,
+					HostIP: n.IP,
+				}
 			}
 		}
 	}
-	return "", 0
+	return AllocatedPortMapping{}
 }
 
 func (ns Networks) NetIndex(n *NetworkResource) int {
@@ -6168,7 +6160,8 @@ func (tg *TaskGroup) Validate(j *Job) error {
 func (tg *TaskGroup) validateNetworks() error {
 	var mErr multierror.Error
 	portLabels := make(map[string]string)
-	staticPorts := make(map[int]string)
+	// host_network -> static port tracking
+	staticPortsIndex := make(map[string]map[int]string)
 
 	for _, net := range tg.Networks {
 		for _, port := range append(net.ReservedPorts, net.DynamicPorts...) {
@@ -6179,6 +6172,14 @@ func (tg *TaskGroup) validateNetworks() error {
 			}
 
 			if port.Value != 0 {
+				hostNetwork := port.HostNetwork
+				if hostNetwork == "" {
+					hostNetwork = "default"
+				}
+				staticPorts, ok := staticPortsIndex[hostNetwork]
+				if !ok {
+					staticPorts = make(map[int]string)
+				}
 				// static port
 				if other, ok := staticPorts[port.Value]; ok {
 					err := fmt.Errorf("Static port %d already reserved by %s", port.Value, other)
@@ -6188,6 +6189,7 @@ func (tg *TaskGroup) validateNetworks() error {
 					mErr.Errors = append(mErr.Errors, err)
 				} else {
 					staticPorts[port.Value] = fmt.Sprintf("taskgroup network:%s", port.Label)
+					staticPortsIndex[hostNetwork] = staticPorts
 				}
 			}
 
@@ -6213,6 +6215,14 @@ func (tg *TaskGroup) validateNetworks() error {
 				}
 
 				if port.Value != 0 {
+					hostNetwork := port.HostNetwork
+					if hostNetwork == "" {
+						hostNetwork = "default"
+					}
+					staticPorts, ok := staticPortsIndex[hostNetwork]
+					if !ok {
+						staticPorts = make(map[int]string)
+					}
 					if other, ok := staticPorts[port.Value]; ok {
 						err := fmt.Errorf("Static port %d already reserved by %s", port.Value, other)
 						mErr.Errors = append(mErr.Errors, err)
@@ -6221,6 +6231,7 @@ func (tg *TaskGroup) validateNetworks() error {
 						mErr.Errors = append(mErr.Errors, err)
 					} else {
 						staticPorts[port.Value] = fmt.Sprintf("%s:%s", task.Name, port.Label)
+						staticPortsIndex[hostNetwork] = staticPorts
 					}
 				}
 			}
@@ -8765,11 +8776,13 @@ type DeploymentState struct {
 	AutoPromote bool
 
 	// ProgressDeadline is the deadline by which an allocation must transition
-	// to healthy before the deployment is considered failed.
+	// to healthy before the deployment is considered failed. This value is set
+	// by the jobspec `update.progress_deadline` field.
 	ProgressDeadline time.Duration
 
-	// RequireProgressBy is the time by which an allocation must transition
-	// to healthy before the deployment is considered failed.
+	// RequireProgressBy is the time by which an allocation must transition to
+	// healthy before the deployment is considered failed. This value is reset
+	// to "now" + ProgressDeadline when an allocation updates the deployment.
 	RequireProgressBy time.Time
 
 	// Promoted marks whether the canaries have been promoted
